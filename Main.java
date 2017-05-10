@@ -13,6 +13,7 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Pane;
+import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 
 import java.util.*;
@@ -35,8 +36,11 @@ public class Main extends Application {
     private Group tileGroup = new Group();
     private Group enemyTileGroup = new Group();
     private Group shipGroup = new Group();
+    private Group shotResultsGroup = new Group();
 
     private Stack<ShipSegment[]> shipsToPlace = new Stack<>();
+
+    private int numberOfShipSegments = 0;
 
     public static int getHEIGHT() {
         return HEIGHT;
@@ -51,7 +55,7 @@ public class Main extends Application {
         root.setPrefSize(TILE_SIZE * WIDTH * 2 + GAP_BETWEEN_BOARDS - 10,TILE_SIZE * HEIGHT - 10);
 
 
-        root.getChildren().addAll(tileGroup,enemyTileGroup,shipGroup);
+        root.getChildren().addAll(tileGroup,enemyTileGroup,shipGroup,shotResultsGroup);
 
         for (int y = 0; y < HEIGHT; y++) {
             for (int x = 0; x < WIDTH; x++) {
@@ -80,37 +84,20 @@ public class Main extends Application {
         Optional<ButtonType> result = alert.showAndWait();
         if(result.get() == button7){
             WIDTH = HEIGHT =  7;
-            shipsToPlace.push(new ShipSegment[1]);
-            shipsToPlace.push(new ShipSegment[2]);
-            shipsToPlace.push(new ShipSegment[3]);
-            shipsToPlace.push(new ShipSegment[4]);
-
+            int[] shipsSizes = {1,2,3,4};
+            setShipsToPlace(shipsSizes);
         }
 
         else if(result.get() == button10){
             WIDTH = HEIGHT =  10;
-            shipsToPlace.push(new ShipSegment[2]);
-            shipsToPlace.push(new ShipSegment[2]);
-            shipsToPlace.push(new ShipSegment[2]);
-            shipsToPlace.push(new ShipSegment[3]);
-            shipsToPlace.push(new ShipSegment[3]);
-            shipsToPlace.push(new ShipSegment[4]);
-            shipsToPlace.push(new ShipSegment[5]);
+            int[] shipsSizes = {2,2,2,3,3,4,5};
+            setShipsToPlace(shipsSizes);
         }
 
         else if(result.get() == button12){
             WIDTH = HEIGHT =  12;
-            shipsToPlace.push(new ShipSegment[1]);
-            shipsToPlace.push(new ShipSegment[1]);
-            shipsToPlace.push(new ShipSegment[1]);
-            shipsToPlace.push(new ShipSegment[2]);
-            shipsToPlace.push(new ShipSegment[2]);
-            shipsToPlace.push(new ShipSegment[3]);
-            shipsToPlace.push(new ShipSegment[3]);
-            shipsToPlace.push(new ShipSegment[3]);
-            shipsToPlace.push(new ShipSegment[4]);
-            shipsToPlace.push(new ShipSegment[4]);
-            shipsToPlace.push(new ShipSegment[5]);
+            int[] shipsSizes = {1,1,1,2,2,3,3,3,4,4,5};
+            setShipsToPlace(shipsSizes);
         }
 
         board = new Tile[WIDTH][HEIGHT];
@@ -191,6 +178,13 @@ public class Main extends Application {
 
     }
 
+    private void setShipsToPlace(int[] shipsSizes){
+        for(int i:shipsSizes){
+            shipsToPlace.push(new ShipSegment[i]);
+            numberOfShipSegments += i;
+        }
+    }
+
     private boolean canShipBePlaced(ShipSegment[] ship, int x, int y, boolean isHorizontal){
         for(int i = 0; i < ship.length; i++){
             if(isHorizontal){
@@ -215,20 +209,49 @@ public class Main extends Application {
     }
 
     private void shot(int x, int y){
-        //System.out.println("Color: " + enemyBoard[x][y].getFill().toString());
         if(!enemyBoard[x][y].isAlreadyClicked()) {
             if (enemyBoard[x][y].getHasShip()) {
                 System.out.println("hit!");
-                enemyBoard[x][y].setFill(Color.RED);//fixme: color of the tile is changed, but it doesn't appear on screen
+                showShotResultOnBoard(true,false,x,y);
+
+                numberOfShipSegments--;
+                if(numberOfShipSegments == 0){
+                    System.out.println("You won!");
+
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    alert.setTitle("You won!");
+                    alert.setHeaderText("Congratulations, you are the winner!");
+                    alert.showAndWait();
+                }
+                //enemyBoard[x][y].setFill(Color.RED);//fixme: color of the tile is changed, but it doesn't appear on screen
             }
             else {
                 System.out.println("miss!");
+                showShotResultOnBoard(false,false,x,y);
             }
             enemyBoard[x][y].setAlreadyClicked(true);
         }
         else
             System.out.println("You have already shot this tile!");
     }
+
+    private void showShotResultOnBoard(boolean shipSegmentDestroyed, boolean isItFriendlyBoard, int x, int y){
+        Rectangle rectangle = new Rectangle(TILE_SIZE,TILE_SIZE);
+        rectangle.setStroke(Color.GRAY);
+        rectangle.setStrokeWidth(2);
+        if(shipSegmentDestroyed)
+            rectangle.setFill(Color.RED);
+        else
+            rectangle.setFill(Color.WHITE);
+        if(isItFriendlyBoard)
+            rectangle.relocate(x * TILE_SIZE, y * TILE_SIZE);
+        else
+            rectangle.relocate((x+ Main.getWIDTH()) * Main.TILE_SIZE + Main.GAP_BETWEEN_BOARDS , y * Main.TILE_SIZE);
+
+        shotResultsGroup.getChildren().add(rectangle);
+
+    }
+    //TODO: connectToServer; setupStreams; whilePlaying
 
     private void placeShip(ShipSegment[] ship, int x, int y, boolean isHorizontal){
 
