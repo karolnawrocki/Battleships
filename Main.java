@@ -73,32 +73,49 @@ public class Main extends Application {
 
     @Override
     public void start(Stage stage){
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        Alert hostOrClientAlert = new Alert(Alert.AlertType.CONFIRMATION);
+        hostOrClientAlert.setTitle("Battleships");
+        hostOrClientAlert.setHeaderText("Launch client or server?");
+        ButtonType clientButton = new ButtonType("Client");
+        ButtonType serverButton = new ButtonType("Server");
+        hostOrClientAlert.getButtonTypes().setAll(clientButton, serverButton);
+        Optional<ButtonType> hostOrClientResult = hostOrClientAlert.showAndWait();
 
-        alert.setTitle("Battleships");
-        alert.setHeaderText("Choose board size");
-        ButtonType button7 = new ButtonType("7x7");
-        ButtonType button10 = new ButtonType("10x10");
-        ButtonType button12 = new ButtonType("12x12");
-        alert.getButtonTypes().setAll(button7, button10, button12);
-        Optional<ButtonType> result = alert.showAndWait();
-        if(result.get() == button7){
-            WIDTH = HEIGHT =  7;
-            int[] shipsSizes = {1,2,3,4};
-            setShipsToPlace(shipsSizes);
+        if(hostOrClientResult.get() == serverButton){
+            Alert chooseSizeAlert = new Alert(Alert.AlertType.CONFIRMATION);
+            chooseSizeAlert.setTitle("Battleships");
+            chooseSizeAlert.setHeaderText("Choose board size");
+            ButtonType button7 = new ButtonType("7x7");
+            ButtonType button10 = new ButtonType("10x10");
+            ButtonType button12 = new ButtonType("12x12");
+            chooseSizeAlert.getButtonTypes().setAll(button7, button10, button12);
+            Optional<ButtonType> chooseSizeResult = chooseSizeAlert.showAndWait();
+
+            if(chooseSizeResult.get() == button7){
+                WIDTH = HEIGHT =  7;
+                int[] shipsSizes = {1,2,3,4};
+                setShipsToPlace(shipsSizes);
+            }
+
+            else if(chooseSizeResult.get() == button10){
+                WIDTH = HEIGHT =  10;
+                int[] shipsSizes = {2,2,2,3,3,4,5};
+                setShipsToPlace(shipsSizes);
+            }
+
+            else if(chooseSizeResult.get() == button12){
+                WIDTH = HEIGHT =  12;
+                int[] shipsSizes = {1,1,1,2,2,3,3,3,4,4,5};
+                setShipsToPlace(shipsSizes);
+            }
+            //TODO: setup server for client to connect
+        }
+        else if(hostOrClientResult.get() == clientButton){
+            //TODO: connect with server
         }
 
-        else if(result.get() == button10){
-            WIDTH = HEIGHT =  10;
-            int[] shipsSizes = {2,2,2,3,3,4,5};
-            setShipsToPlace(shipsSizes);
-        }
 
-        else if(result.get() == button12){
-            WIDTH = HEIGHT =  12;
-            int[] shipsSizes = {1,1,1,2,2,3,3,3,4,4,5};
-            setShipsToPlace(shipsSizes);
-        }
+
 
         board = new Tile[WIDTH][HEIGHT];
         enemyBoard = new Tile[WIDTH][HEIGHT];
