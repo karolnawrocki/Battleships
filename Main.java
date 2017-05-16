@@ -16,6 +16,13 @@ import javafx.scene.layout.Pane;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.util.*;
 
 public class Main extends Application {
@@ -41,6 +48,12 @@ public class Main extends Application {
     private Stack<ShipSegment[]> shipsToPlace = new Stack<>();
 
     private int numberOfShipSegments = 0;
+
+    private ServerSocket server;
+    private ObjectOutputStream output;
+    private ObjectInputStream input;
+    private Socket connection;
+    private String serverIP;
 
     public static int getHEIGHT() {
         return HEIGHT;
@@ -82,40 +95,50 @@ public class Main extends Application {
         Optional<ButtonType> hostOrClientResult = hostOrClientAlert.showAndWait();
 
         if(hostOrClientResult.get() == serverButton){
-            Alert chooseSizeAlert = new Alert(Alert.AlertType.CONFIRMATION);
-            chooseSizeAlert.setTitle("Battleships");
-            chooseSizeAlert.setHeaderText("Choose board size");
-            ButtonType button7 = new ButtonType("7x7");
-            ButtonType button10 = new ButtonType("10x10");
-            ButtonType button12 = new ButtonType("12x12");
-            chooseSizeAlert.getButtonTypes().setAll(button7, button10, button12);
-            Optional<ButtonType> chooseSizeResult = chooseSizeAlert.showAndWait();
 
-            if(chooseSizeResult.get() == button7){
-                WIDTH = HEIGHT =  7;
-                int[] shipsSizes = {1,2,3,4};
-                setShipsToPlace(shipsSizes);
+            try{
+                server = new ServerSocket(6666,2);
+                waitForConnection();
+                setupStreams();
+                setupBoardSize(askServerAboutSize());
+                sendBoardSizeToClient();
+//                while(true){
+//
+//                }
+            }catch(IOException iOException){
+                System.out.println("Server ended the connection");
+                iOException.printStackTrace();
+            }finally {
+                closeConnection();
             }
 
-            else if(chooseSizeResult.get() == button10){
-                WIDTH = HEIGHT =  10;
-                int[] shipsSizes = {2,2,2,3,3,4,5};
-                setShipsToPlace(shipsSizes);
-            }
-
-            else if(chooseSizeResult.get() == button12){
-                WIDTH = HEIGHT =  12;
-                int[] shipsSizes = {1,1,1,2,2,3,3,3,4,4,5};
-                setShipsToPlace(shipsSizes);
-            }
-            //TODO: setup server for client to connect
         }
+
         else if(hostOrClientResult.get() == clientButton){
-            //TODO: connect with server
+            serverIP = "127.0.0.1";
+            try{
+                connectToServer();
+                setupStreams();
+                setupBoardSize(receiveBoardSizeFromServer());
+                //receiveBoardSizeFromServer();
+            }catch(EOFException eofException){
+                System.out.println("client terminated the exception");
+            }catch(IOException ioException){
+                ioException.printStackTrace();
+            }finally {
+                closeConnection();
+            }
+
+            //set height and width
+            //int[] shipsSizes = {???};
+            //setShipsToPlace(shipsSizes);
+            //place ships
+            //wait for info about enemy board and set it
+            //start playing
+            //if all enemy ships are destroyed send information to the other player and end the game
+
+
         }
-
-
-
 
         board = new Tile[WIDTH][HEIGHT];
         enemyBoard = new Tile[WIDTH][HEIGHT];
@@ -195,6 +218,103 @@ public class Main extends Application {
 
     }
 
+    private int askServerAboutSize(){
+        Alert chooseSizeAlert = new Alert(Alert.AlertType.CONFIRMATION);
+        chooseSizeAlert.setTitle("Battleships");
+        chooseSizeAlert.setHeaderText("Choose board size");
+        ButtonType button7 = new ButtonType("7x7");
+        ButtonType button10 = new ButtonType("10x10");
+        ButtonType button12 = new ButtonType("12x12");
+        chooseSizeAlert.getButtonTypes().setAll(button7, button10, button12);
+        Optional<ButtonType> chooseSizeResult = chooseSizeAlert.showAndWait();
+
+        if(chooseSizeResult.get() == button7){
+            return 7;
+        }
+
+        else if(chooseSizeResult.get() == button10){
+            return 10;
+        }
+
+        else if(chooseSizeResult.get() == button12){
+            return 12;
+        }
+        else
+            return 0;
+    }
+
+    private int receiveBoardSizeFromServer() throws IOException{
+        do {
+            try {
+                int tempBoardSize = (int) input.readObject();
+                System.out.println("board size: " + tempBoardSize);
+                return tempBoardSize;
+            }catch(ClassNotFoundException e){
+                System.out.println("unknown data received");
+            }
+        }while(true);
+    }
+
+    private void sendBoardSizeToClient(){
+        try{
+            output.writeObject(WIDTH);
+            System.out.println("board size was sent to client");
+            output.flush();
+        }catch(IOException e){
+            e.printStackTrace();
+            System.out.println("cannot send board size");
+        }
+    }
+
+
+
+    private void connectToServer() throws IOException{
+        System.out.println("attempting connection");
+        connection = new Socket(InetAddress.getByName(serverIP), 6666);
+        System.out.println("connection established! connected to: " + connection.getInetAddress().getHostName());
+    }
+
+    private void closeConnection(){
+        System.out.println("closing connection");
+        playersTurn = false;
+        try{
+            output.close();
+            input.close();
+            connection.close();
+        }catch (IOException e){
+            e.printStackTrace();
+        }
+    }
+
+    private void waitForConnection() throws IOException{
+        System.out.println("Waiting for someone to connect");
+        connection = server.accept();
+        System.out.println("Connected to " + connection.getInetAddress().getHostName());
+    }
+
+    private void setupStreams() throws IOException{
+        output = new ObjectOutputStream(connection.getOutputStream());
+        output.flush();
+        input = new ObjectInputStream(connection.getInputStream());
+        System.out.println("streams are now set up");
+    }
+
+    private void setupBoardSize(int size) {
+        WIDTH = HEIGHT = size;
+        if(size == 7){
+            int[] shipsSizes = {1,2,3,4};
+            setShipsToPlace(shipsSizes);
+        }else if(size == 10){
+            int[] shipsSizes = {2,2,2,3,3,4,5};
+            setShipsToPlace(shipsSizes);
+        }else if(size == 12){
+            int[] shipsSizes = {1,1,1,2,2,3,3,3,4,4,5};
+            setShipsToPlace(shipsSizes);
+        }
+        else
+            System.out.println("wrong size");
+    }
+
     private void setShipsToPlace(int[] shipsSizes){
         for(int i:shipsSizes){
             shipsToPlace.push(new ShipSegment[i]);
@@ -240,7 +360,6 @@ public class Main extends Application {
                     alert.setHeaderText("Congratulations, you are the winner!");
                     alert.showAndWait();
                 }
-                //enemyBoard[x][y].setFill(Color.RED);//fixme: color of the tile is changed, but it doesn't appear on screen
             }
             else {
                 System.out.println("miss!");
@@ -268,7 +387,6 @@ public class Main extends Application {
         shotResultsGroup.getChildren().add(rectangle);
 
     }
-    //TODO: connectToServer; setupStreams; whilePlaying
 
     private void placeShip(ShipSegment[] ship, int x, int y, boolean isHorizontal){
 
