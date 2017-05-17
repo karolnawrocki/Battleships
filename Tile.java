@@ -3,7 +3,9 @@ package Battleships;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 
-public class Tile extends Rectangle {
+import java.io.Serializable;
+
+public class Tile extends Rectangle implements Serializable{
 
     private boolean hasShip;
 

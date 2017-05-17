@@ -100,18 +100,13 @@ public class Main extends Application {
                 server = new ServerSocket(6666,2);
                 waitForConnection();
                 setupStreams();
-                setupBoardSize(askServerAboutSize());
+                setupBoardSize(askUserAboutSize());
                 sendBoardSizeToClient();
-//                while(true){
-//
-//                }
+
             }catch(IOException iOException){
                 System.out.println("Server ended the connection");
                 iOException.printStackTrace();
-            }finally {
-                closeConnection();
             }
-
         }
 
         else if(hostOrClientResult.get() == clientButton){
@@ -120,24 +115,13 @@ public class Main extends Application {
                 connectToServer();
                 setupStreams();
                 setupBoardSize(receiveBoardSizeFromServer());
-                //receiveBoardSizeFromServer();
+
+
             }catch(EOFException eofException){
                 System.out.println("client terminated the exception");
             }catch(IOException ioException){
                 ioException.printStackTrace();
-            }finally {
-                closeConnection();
             }
-
-            //set height and width
-            //int[] shipsSizes = {???};
-            //setShipsToPlace(shipsSizes);
-            //place ships
-            //wait for info about enemy board and set it
-            //start playing
-            //if all enemy ships are destroyed send information to the other player and end the game
-
-
         }
 
         board = new Tile[WIDTH][HEIGHT];
@@ -165,7 +149,7 @@ public class Main extends Application {
                         placeShip(shipsToPlace.pop(),x,y,isHorizontal);
                     }
                     stage.setTitle("All ships placed");
-                    enemyBoard = board.clone();//TODO: remove after implementing socket connection
+                    handleBoardSetup();
 
                 }
             }
@@ -173,7 +157,6 @@ public class Main extends Application {
         scene.setOnMousePressed(new EventHandler<MouseEvent>() {
             @Override
             public void handle(MouseEvent event) {
-
                 if(!shipsToPlace.empty()){
                     int x = (int)event.getX() / TILE_SIZE;
                     int y = (int)event.getY() / TILE_SIZE;
@@ -189,7 +172,7 @@ public class Main extends Application {
                         stage.setTitle("Place ship of size: " + Integer.toString(shipsToPlace.peek().length));
                     else{
                         stage.setTitle("All ships placed");
-                        enemyBoard = board.clone();//TODO: remove after implementing socket connection
+                        handleBoardSetup();
                     }
                 }
                 else if(playersTurn && (int)event.getX() > (WIDTH*TILE_SIZE) + GAP_BETWEEN_BOARDS){
@@ -197,28 +180,15 @@ public class Main extends Application {
                     int y = (int)event.getY()  / TILE_SIZE;
                     //System.out.println(x + ", " + y);
                     shot(x, y);
+                    //TODO: players take turns one after another
                 }
-
-////////////////////////////////////////////////////////////////
-//                for(int i = 0; i < WIDTH; i++){
-//                    for(int j = 0; j < HEIGHT; j++){
-//                        if(enemyBoard[j][i].isHasShip())
-//                            System.out.print(1 + " ");
-//                        else
-//                            System.out.print(0 + " ");
-//                    }
-//                    System.out.println();
-//                }
-//                System.out.println();
-////////////////////////////////////////////////////////////////
             }
         });
         stage.setScene(scene);
         stage.show();
-
     }
 
-    private int askServerAboutSize(){
+    private int askUserAboutSize(){
         Alert chooseSizeAlert = new Alert(Alert.AlertType.CONFIRMATION);
         chooseSizeAlert.setTitle("Battleships");
         chooseSizeAlert.setHeaderText("Choose board size");
@@ -243,12 +213,47 @@ public class Main extends Application {
             return 0;
     }
 
+    private void handleBoardSetup(){
+        try{
+            sendMyBoardToOtherPlayer();
+            receiveEnemyBoard();
+        }catch(EOFException eofException){
+            System.out.println("client terminated the exception");
+        }catch(IOException ioException){
+            ioException.printStackTrace();
+        }
+    }
+
     private int receiveBoardSizeFromServer() throws IOException{
         do {
             try {
                 int tempBoardSize = (int) input.readObject();
                 System.out.println("board size: " + tempBoardSize);
                 return tempBoardSize;
+            }catch(ClassNotFoundException e){
+                System.out.println("unknown data received");
+            }
+        }while(true);
+    }
+
+    private void sendMyBoardToOtherPlayer() throws IOException{
+        try{
+            output.writeObject(this.board.clone());
+            System.out.println("board was sent to client");
+            output.flush();
+        }catch(IOException e){
+            e.printStackTrace();
+            System.out.println("cannot send board");
+        }
+    }
+
+    private void receiveEnemyBoard() throws IOException{
+        do {
+            try {
+                Tile[][] enemyBoard = (Tile[][]) input.readObject();
+                System.out.println("enemy board received");
+                this.enemyBoard = enemyBoard.clone();
+                return;
             }catch(ClassNotFoundException e){
                 System.out.println("unknown data received");
             }
@@ -265,8 +270,6 @@ public class Main extends Application {
             System.out.println("cannot send board size");
         }
     }
-
-
 
     private void connectToServer() throws IOException{
         System.out.println("attempting connection");
@@ -350,7 +353,6 @@ public class Main extends Application {
             if (enemyBoard[x][y].getHasShip()) {
                 System.out.println("hit!");
                 showShotResultOnBoard(true,false,x,y);
-
                 numberOfShipSegments--;
                 if(numberOfShipSegments == 0){
                     System.out.println("You won!");
@@ -385,7 +387,6 @@ public class Main extends Application {
             rectangle.relocate((x+ Main.getWIDTH()) * Main.TILE_SIZE + Main.GAP_BETWEEN_BOARDS , y * Main.TILE_SIZE);
 
         shotResultsGroup.getChildren().add(rectangle);
-
     }
 
     private void placeShip(ShipSegment[] ship, int x, int y, boolean isHorizontal){
