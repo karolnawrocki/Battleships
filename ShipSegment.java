@@ -3,10 +3,8 @@ package Battleships;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 
-public class ShipSegment extends Rectangle {
-    private boolean isAlive;
-    public ShipSegment(int x, int y, boolean isFriendly){
-        this.isAlive = true;
+class ShipSegment extends Rectangle {
+    ShipSegment(int x, int y){
         setWidth(Main.TILE_SIZE);
         setHeight(Main.TILE_SIZE);
         this.setStroke(Color.GRAY);

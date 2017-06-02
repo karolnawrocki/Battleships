@@ -5,39 +5,39 @@ import javafx.scene.shape.Rectangle;
 
 import java.io.Serializable;
 
-public class Tile extends Rectangle implements Serializable{
+class Tile extends Rectangle implements Serializable{
 
     private boolean hasShip;
 
-    public boolean isAvailable() {
+    boolean isAvailable() {
         return available;
     }
 
-    public void setAvailable(boolean available) {
+    void setAvailable(boolean available) {
         this.available = available;
     }
 
     private boolean available;
 
-    public boolean getHasShip() {
+    boolean getHasShip() {
         return hasShip;
     }
 
-    public void setHasShip(boolean hasShip) {
+    void setHasShip(boolean hasShip) {
         this.hasShip = hasShip;
     }
 
     private boolean alreadyClicked;
 
-    public boolean isAlreadyClicked() {
+    boolean isAlreadyClicked() {
         return alreadyClicked;
     }
 
-    public void setAlreadyClicked(boolean alreadyClicked) {
+    void setAlreadyClicked(boolean alreadyClicked) {
         this.alreadyClicked = alreadyClicked;
     }
 
-    public Tile(int x, int y, boolean isFriendly){
+    Tile(int x, int y, boolean isFriendly){
         setWidth(Main.TILE_SIZE);
         setHeight(Main.TILE_SIZE);
         this.hasShip = false;

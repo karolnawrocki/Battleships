@@ -1,6 +1,7 @@
 package Battleships;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.scene.paint.Color;
 import javafx.event.EventHandler;
 import javafx.scene.Group;
@@ -23,16 +24,18 @@ import java.io.ObjectOutputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.*;
 
 public class Main extends Application {
-    public static final int TILE_SIZE = 40;
+    static final int TILE_SIZE = 40;
 
     private static int HEIGHT;
     private static int WIDTH;
-    public static final int GAP_BETWEEN_BOARDS = 10;
+    static final int GAP_BETWEEN_BOARDS = 10;
 
-    private boolean playersTurn = true;
+    private boolean playersTurn;
+    private boolean shipsPlaced;
 
     private Scene scene;
 
@@ -47,7 +50,8 @@ public class Main extends Application {
 
     private Stack<ShipSegment[]> shipsToPlace = new Stack<>();
 
-    private int numberOfShipSegments = 0;
+    private int numberOfEnemyShipSegments = 0;
+    private int numberOfMyShipSegments = 0;
 
     private ServerSocket server;
     private ObjectOutputStream output;
@@ -55,18 +59,15 @@ public class Main extends Application {
     private Socket connection;
     private String serverIP;
 
-    public static int getHEIGHT() {
-        return HEIGHT;
-    }
+    private Thread thread;
 
-    public static int getWIDTH() {
+    static int getWIDTH() {
         return WIDTH;
     }
 
     private Parent createContent(){
         Pane root = new Pane();
         root.setPrefSize(TILE_SIZE * WIDTH * 2 + GAP_BETWEEN_BOARDS - 10,TILE_SIZE * HEIGHT - 10);
-
 
         root.getChildren().addAll(tileGroup,enemyTileGroup,shipGroup,shotResultsGroup);
 
@@ -107,29 +108,52 @@ public class Main extends Application {
                 System.out.println("Server ended the connection");
                 iOException.printStackTrace();
             }
+            playersTurn = true;
+            setupStage(stage);
         }
 
-        else if(hostOrClientResult.get() == clientButton){
+        else if(hostOrClientResult.get() == clientButton) {
             serverIP = "127.0.0.1";
-            try{
+            try {
                 connectToServer();
                 setupStreams();
                 setupBoardSize(receiveBoardSizeFromServer());
 
-
-            }catch(EOFException eofException){
+            } catch (EOFException eofException) {
                 System.out.println("client terminated the exception");
-            }catch(IOException ioException){
+                eofException.printStackTrace();
+            } catch (IOException ioException) {
                 ioException.printStackTrace();
             }
+            playersTurn = false;
+            setupStage(stage);
         }
+    }
 
+    private void setupStage(Stage stage){
         board = new Tile[WIDTH][HEIGHT];
         enemyBoard = new Tile[WIDTH][HEIGHT];
 
         stage.setTitle("Place ship of size: " + Integer.toString(shipsToPlace.peek().length));
         stage.setResizable(false);
         this.scene = new Scene(createContent());
+
+        thread = new Thread(()->{
+            while (true) {
+                try {
+                    if (shipsPlaced && numberOfMyShipSegments != 0 && numberOfEnemyShipSegments != 0)
+                        receiveShotCoordinatesFromEnemy();
+                } catch (EOFException eofException) {
+
+                    System.out.println("client terminated the exception");
+                    eofException.printStackTrace();
+                    Platform.exit();
+                } catch (IOException ioException) {
+                    ioException.printStackTrace();
+                }
+            }
+        });
+        thread.setDaemon(true);
 
         scene.setOnKeyPressed(new EventHandler<KeyEvent>() {
             @Override
@@ -148,7 +172,7 @@ public class Main extends Application {
                         }while(!canShipBePlaced(shipsToPlace.peek(),x,y,isHorizontal));
                         placeShip(shipsToPlace.pop(),x,y,isHorizontal);
                     }
-                    stage.setTitle("All ships placed");
+                    stage.setTitle("Battleships");
                     handleBoardSetup();
 
                 }
@@ -171,16 +195,21 @@ public class Main extends Application {
                     if(!shipsToPlace.empty())
                         stage.setTitle("Place ship of size: " + Integer.toString(shipsToPlace.peek().length));
                     else{
-                        stage.setTitle("All ships placed");
+                        stage.setTitle("Battleships");
                         handleBoardSetup();
+
                     }
                 }
                 else if(playersTurn && (int)event.getX() > (WIDTH*TILE_SIZE) + GAP_BETWEEN_BOARDS){
                     int x = ((int)event.getX() - (WIDTH*TILE_SIZE) - GAP_BETWEEN_BOARDS) / TILE_SIZE;
                     int y = (int)event.getY()  / TILE_SIZE;
-                    //System.out.println(x + ", " + y);
+
                     shot(x, y);
-                    //TODO: players take turns one after another
+                    try{
+                        sendShotCoordinatesToEnemy(x,y);
+                    }catch(Exception e){
+                        e.printStackTrace();
+                    }
                 }
             }
         });
@@ -213,12 +242,18 @@ public class Main extends Application {
             return 0;
     }
 
+
+
     private void handleBoardSetup(){
+        shipsPlaced = true;
         try{
             sendMyBoardToOtherPlayer();
             receiveEnemyBoard();
+            thread.start();
+
         }catch(EOFException eofException){
             System.out.println("client terminated the exception");
+            eofException.printStackTrace();
         }catch(IOException ioException){
             ioException.printStackTrace();
         }
@@ -236,15 +271,49 @@ public class Main extends Application {
         }while(true);
     }
 
-    private void sendMyBoardToOtherPlayer() throws IOException{
-        try{
-            output.writeObject(this.board.clone());
-            System.out.println("board was sent to client");
-            output.flush();
-        }catch(IOException e){
-            e.printStackTrace();
-            System.out.println("cannot send board");
-        }
+    private void receiveShotCoordinatesFromEnemy() throws IOException{
+        do {
+            try {
+                Coordinates coords = (Coordinates) input.readObject();
+                int x = coords.getX();
+                int y = coords.getY();
+                System.out.println("shot coordinates from enemy: " + x + ", " + y + " were received");
+                Platform.runLater(()->{
+                    showShotResultOnBoard(board[x][y].getHasShip(), true, x, y);
+                    if(!board[x][y].getHasShip())
+                        playersTurn = true;
+                    else{
+                        numberOfMyShipSegments--;
+                        if(numberOfMyShipSegments == 0){
+                            System.out.println("You lose!");
+                            playersTurn = false;
+                            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                            alert.setTitle("You lose!");
+                            alert.setHeaderText("Sorry, you are the loser!");
+                            alert.showAndWait();
+                            closeConnection();
+                            Platform.exit();
+                        }
+                    }
+                    System.out.println("My ship segments: " + numberOfMyShipSegments);
+                });
+                playersTurn = true;
+                return;
+            } catch (ClassNotFoundException e) {
+                System.out.println("class not found");
+                e.printStackTrace();
+            } catch(ClassCastException classCastException){
+                System.out.println("class cast exception");
+                classCastException.printStackTrace();
+            } catch (SocketException socketException){
+                System.out.println("socket closed, exiting application");
+                Platform.exit();
+            } catch (EOFException eofException){
+                System.out.println("client terminated the exception");
+                eofException.printStackTrace();
+                Platform.exit();
+            }
+        }while(true);
     }
 
     private void receiveEnemyBoard() throws IOException{
@@ -260,10 +329,46 @@ public class Main extends Application {
         }while(true);
     }
 
+    private void sendShotCoordinatesToEnemy(int x, int y) throws IOException{
+        try{
+            output.writeObject(new Coordinates(x,y));
+            System.out.println("shot coordinates: " + x + ", " + y + " were sent to enemy");
+            if(numberOfEnemyShipSegments == 0){
+                System.out.println("You won!");
+                playersTurn = false;
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("You won!");
+                alert.setHeaderText("Congratulations, you are the winner!");
+                alert.showAndWait();
+                closeConnection();
+                Platform.exit();
+            }
+            output.flush();
+        }catch(IOException e){
+            e.printStackTrace();
+            System.out.println("cannot send coordinates");
+        }
+    }
+
+
+
+    private void sendMyBoardToOtherPlayer() throws IOException{
+        try{
+            output.writeObject(this.board.clone());
+            System.out.println("board was sent to " + connection.getInetAddress().getHostName());
+            output.flush();
+        }catch(IOException e){
+            e.printStackTrace();
+            System.out.println("cannot send board");
+        }
+    }
+
+
+
     private void sendBoardSizeToClient(){
         try{
             output.writeObject(WIDTH);
-            System.out.println("board size was sent to client");
+            System.out.println("board size was sent to " + connection.getInetAddress().getHostName());
             output.flush();
         }catch(IOException e){
             e.printStackTrace();
@@ -321,7 +426,8 @@ public class Main extends Application {
     private void setShipsToPlace(int[] shipsSizes){
         for(int i:shipsSizes){
             shipsToPlace.push(new ShipSegment[i]);
-            numberOfShipSegments += i;
+            numberOfEnemyShipSegments += i;
+            numberOfMyShipSegments += i;
         }
     }
 
@@ -353,18 +459,12 @@ public class Main extends Application {
             if (enemyBoard[x][y].getHasShip()) {
                 System.out.println("hit!");
                 showShotResultOnBoard(true,false,x,y);
-                numberOfShipSegments--;
-                if(numberOfShipSegments == 0){
-                    System.out.println("You won!");
+                numberOfEnemyShipSegments--;
 
-                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                    alert.setTitle("You won!");
-                    alert.setHeaderText("Congratulations, you are the winner!");
-                    alert.showAndWait();
-                }
             }
             else {
                 System.out.println("miss!");
+                playersTurn = false;
                 showShotResultOnBoard(false,false,x,y);
             }
             enemyBoard[x][y].setAlreadyClicked(true);
@@ -393,7 +493,7 @@ public class Main extends Application {
 
         for(int i = 0; i < ship.length; i++){
             if(isHorizontal) {
-                ship[i] = new ShipSegment(x + i, y ,true);
+                ship[i] = new ShipSegment(x + i, y);
                 board[x+i][y].setHasShip(true);
 
                 setUnavailable(x+i-1, y-1);
@@ -407,7 +507,7 @@ public class Main extends Application {
                 setUnavailable(x+i+1, y+1);
             }
             else{
-                ship[i] = new ShipSegment(x, y + i ,true);
+                ship[i] = new ShipSegment(x, y + i);
                 board[x][y+i].setHasShip(true);
                 setUnavailable(x-1, y+i-1);
                 setUnavailable(x, y+i-1);
