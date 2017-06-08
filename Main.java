@@ -2,6 +2,7 @@ package Battleships;
 
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.scene.control.TextInputDialog;
 import javafx.scene.paint.Color;
 import javafx.event.EventHandler;
 import javafx.scene.Group;
@@ -113,7 +114,12 @@ public class Main extends Application {
         }
 
         else if(hostOrClientResult.get() == clientButton) {
-            serverIP = "127.0.0.1";
+            TextInputDialog textInputDialog = new TextInputDialog();
+            textInputDialog.setHeaderText("Please input server IP");
+            textInputDialog.setTitle("Battleships");
+            textInputDialog.getEditor().setText("192.168.0.");
+            textInputDialog.showAndWait();
+            serverIP = textInputDialog.getEditor().getText();
             try {
                 connectToServer();
                 setupStreams();
@@ -174,7 +180,6 @@ public class Main extends Application {
                     }
                     stage.setTitle("Battleships");
                     handleBoardSetup();
-
                 }
             }
         });
@@ -350,8 +355,6 @@ public class Main extends Application {
         }
     }
 
-
-
     private void sendMyBoardToOtherPlayer() throws IOException{
         try{
             output.writeObject(this.board.clone());
@@ -362,8 +365,6 @@ public class Main extends Application {
             System.out.println("cannot send board");
         }
     }
-
-
 
     private void sendBoardSizeToClient(){
         try{
@@ -460,7 +461,6 @@ public class Main extends Application {
                 System.out.println("hit!");
                 showShotResultOnBoard(true,false,x,y);
                 numberOfEnemyShipSegments--;
-
             }
             else {
                 System.out.println("miss!");
@@ -490,12 +490,10 @@ public class Main extends Application {
     }
 
     private void placeShip(ShipSegment[] ship, int x, int y, boolean isHorizontal){
-
         for(int i = 0; i < ship.length; i++){
             if(isHorizontal) {
                 ship[i] = new ShipSegment(x + i, y);
                 board[x+i][y].setHasShip(true);
-
                 setUnavailable(x+i-1, y-1);
                 setUnavailable(x+i, y-1);
                 setUnavailable(x+i+1, y-1);

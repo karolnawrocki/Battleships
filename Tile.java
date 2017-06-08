@@ -51,7 +51,5 @@ class Tile extends Rectangle implements Serializable{
             relocate((x+ Main.getWIDTH()) * Main.TILE_SIZE + Main.GAP_BETWEEN_BOARDS , y * Main.TILE_SIZE);
             setFill((x + y) % 2 == 0 ? Color.LIGHTSLATEGRAY.darker() : Color.SLATEGRAY.darker());
         }
-
-
     }
 }
